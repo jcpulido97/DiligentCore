@@ -50,6 +50,12 @@ class ShaderResourceLayoutTest : public ::testing::Test
 protected:
     static void SetUpTestSuite()
     {
+        auto* const pEnv       = TestingEnvironment::GetInstance();
+        auto* const pDevice    = pEnv->GetDevice();
+        const auto& deviceCaps = pDevice->GetDeviceCaps();
+
+        UseWARPResourceArrayIndexingBugWorkaround =
+            deviceCaps.DevType == RENDER_DEVICE_TYPE_D3D12 && pEnv->GetAdapterType() == ADAPTER_TYPE_SOFTWARE;
     }
 
     static void TearDownTestSuite()
@@ -218,7 +224,19 @@ protected:
     void TestTexturesAndImtblSamplers(bool TestImtblSamplers);
     void TestStructuredOrFormattedBuffer(bool IsFormatted);
     void TestRWStructuredOrFormattedBuffer(bool IsFormatted);
+
+    // As of Windows version 2004 (build 19041), there is a bug in D3D12 WARP rasterizer:
+    // Shader resource array indexing always references array element 0 when shaders are compiled
+    // with shader model 5.1:
+    //      AllCorrect *= CheckValue(g_Tex2DArr_Static[0].SampleLevel(g_Sampler, UV.xy, 0.0), Tex2DArr_Static_Ref0); // OK
+    //      AllCorrect *= CheckValue(g_Tex2DArr_Static[1].SampleLevel(g_Sampler, UV.xy, 0.0), Tex2DArr_Static_Ref1); // FAIL - g_Tex2DArr_Static[0] is sampled
+    // The shaders work OK when using shader model 5.0 with old compiler.
+    // TODO: this should be fixed in the next Windows release - verify.
+    static bool UseWARPResourceArrayIndexingBugWorkaround;
 };
+
+bool ShaderResourceLayoutTest::UseWARPResourceArrayIndexingBugWorkaround = false;
+
 
 #define SET_STATIC_VAR(PSO, ShaderFlags, VarName, SetMethod, ...)                                \
     do                                                                                           \
@@ -248,6 +266,8 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
     auto* pDevice    = pEnv->GetDevice();
     auto* pSwapChain = pEnv->GetSwapChain();
 
+    const auto& deviceCaps = pDevice->GetDeviceCaps();
+
     float ClearColor[] = {0.25, 0.5, 0.75, 0.125};
     RenderDrawCommandReference(pSwapChain, ClearColor);
 
@@ -274,6 +294,9 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
     static constexpr size_t Tex2DArr_MutIdx[]    = {3, 5};
     static constexpr size_t Tex2DArr_DynIdx[]    = {9, 2};
 
+    const Uint32 VSResArrId = 0;
+    const Uint32 PSResArrId = deviceCaps.Features.SeparablePrograms ? 1 : 0;
+    VERIFY_EXPR(deviceCaps.IsGLDevice() || PSResArrId != VSResArrId);
 
     // clang-format off
     std::vector<ShaderResourceDesc> Resources = 
@@ -285,7 +308,7 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
         ShaderResourceDesc{"g_Tex2DArr_Mut",      SHADER_RESOURCE_TYPE_TEXTURE_SRV, MutableTexArraySize},
         ShaderResourceDesc{"g_Tex2DArr_Dyn",      SHADER_RESOURCE_TYPE_TEXTURE_SRV, DynamicTexArraySize}
     };
-    if (!pDevice->GetDeviceCaps().IsGLDevice())
+    if (!deviceCaps.IsGLDevice())
     {
         if (TestImtblSamplers)
         {
@@ -339,19 +362,26 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
             ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
             ShaderCI.HLSLVersion    = ShaderVersion{5, 0};
         }
+
+        if (UseWARPResourceArrayIndexingBugWorkaround)
+        {
+            // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
+            ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
+            ShaderCI.HLSLVersion    = ShaderVersion{5, 0};
+        }
     };
 
     auto pVS = CreateShader(TestImtblSamplers ? "ShaderResourceLayoutTest.ImtblSamplers - VS" : "ShaderResourceLayoutTest.Textures - VS",
                             TestImtblSamplers ? "ImmutableSamplers.hlsl" : "Textures.hlsl",
                             "VSMain",
-                            SHADER_TYPE_VERTEX, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(0),
+                            SHADER_TYPE_VERTEX, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(VSResArrId),
                             Resources.data(), static_cast<Uint32>(Resources.size()),
                             ModifyShaderCI);
 
     auto pPS = CreateShader(TestImtblSamplers ? "ShaderResourceLayoutTest.ImtblSamplers - PS" : "ShaderResourceLayoutTest.Textures - PS",
                             TestImtblSamplers ? "ImmutableSamplers.hlsl" : "Textures.hlsl",
                             "PSMain",
-                            SHADER_TYPE_PIXEL, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(1),
+                            SHADER_TYPE_PIXEL, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(PSResArrId),
                             Resources.data(), static_cast<Uint32>(Resources.size()),
                             ModifyShaderCI);
     ASSERT_NE(pVS, nullptr);
@@ -398,7 +428,7 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
     ASSERT_NE(pSRB, nullptr);
 
     auto BindResources = [&](SHADER_TYPE ShaderType) {
-        const auto id = ShaderType == SHADER_TYPE_VERTEX ? 0 : 1;
+        const auto id = ShaderType == SHADER_TYPE_VERTEX ? VSResArrId : PSResArrId;
 
         SET_STATIC_VAR(pPSO, ShaderType, "g_Tex2D_Static", Set, RefTextures.GetViewObjects(Tex2D_StaticIdx[id])[0]);
         SET_STATIC_VAR(pPSO, ShaderType, "g_Tex2DArr_Static", SetArray, RefTextures.GetViewObjects(Tex2DArr_StaticIdx[id]), 0, StaticTexArraySize);
@@ -427,13 +457,13 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
     DrawAttribs DrawAttrs{6, DRAW_FLAG_VERIFY_ALL};
     pContext->Draw(DrawAttrs);
 
-    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Tex2D_Dyn", Set, RefTextures.GetViewObjects(Tex2D_DynIdx[0])[0]);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[0]), 0, 1);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[0] + 1), 1, DynamicTexArraySize - 1);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Tex2D_Dyn", Set, RefTextures.GetViewObjects(Tex2D_DynIdx[VSResArrId])[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[VSResArrId]), 0, 1);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[VSResArrId] + 1), 1, DynamicTexArraySize - 1);
 
-    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Tex2D_Dyn", Set, RefTextures.GetViewObjects(Tex2D_DynIdx[1])[0]);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[1]), 0, 1);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[1] + 1), 1, DynamicTexArraySize - 1);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Tex2D_Dyn", Set, RefTextures.GetViewObjects(Tex2D_DynIdx[PSResArrId])[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[PSResArrId]), 0, 1);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Tex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx[PSResArrId] + 1), 1, DynamicTexArraySize - 1);
 
     pContext->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
@@ -461,6 +491,8 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
     auto* pDevice    = pEnv->GetDevice();
     auto* pSwapChain = pEnv->GetSwapChain();
 
+    const auto& deviceCaps = pDevice->GetDeviceCaps();
+
     float ClearColor[] = {0.625, 0.125, 0.25, 0.875};
     RenderDrawCommandReference(pSwapChain, ClearColor);
 
@@ -485,6 +517,10 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
     static constexpr size_t BuffArr_StaticIdx[] = {8, 0};
     static constexpr size_t BuffArr_MutIdx[]    = {3, 4};
     static constexpr size_t BuffArr_DynIdx[]    = {6, 7};
+
+    const Uint32 VSResArrId = 0;
+    const Uint32 PSResArrId = deviceCaps.Features.SeparablePrograms ? 1 : 0;
+    VERIFY_EXPR(deviceCaps.IsGLDevice() || PSResArrId != VSResArrId);
 
     ShaderMacroHelper Macros;
 
@@ -516,8 +552,6 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
 
         return static_cast<const ShaderMacro*>(Macros);
     };
-
-    const auto& deviceCaps = pDevice->GetDeviceCaps();
 
     // Vulkan only allows 16 dynamic storage buffer bindings among all stages, so
     // use arrays only in fragment shader for structured buffer test.
@@ -560,10 +594,19 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
         GTEST_FAIL() << "Unexpected device type";
     }
 
+    auto ModifyShaderCI = [](ShaderCreateInfo& ShaderCI) {
+        if (UseWARPResourceArrayIndexingBugWorkaround)
+        {
+            // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
+            ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
+            ShaderCI.HLSLVersion    = ShaderVersion{5, 0};
+        }
+    };
     auto pVS = CreateShader(IsFormatted ? "ShaderResourceLayoutTest.FormattedBuffers - VS" : "ShaderResourceLayoutTest.StructuredBuffers - VS",
                             ShaderFileName, SrcLang == SHADER_SOURCE_LANGUAGE_HLSL ? "VSMain" : "main",
-                            SHADER_TYPE_VERTEX, SrcLang, PrepareMacros(0, SrcLang),
-                            Resources.data(), static_cast<Uint32>(Resources.size()));
+                            SHADER_TYPE_VERTEX, SrcLang, PrepareMacros(VSResArrId, SrcLang),
+                            Resources.data(), static_cast<Uint32>(Resources.size()),
+                            ModifyShaderCI);
     if (UseArraysInPSOnly)
     {
         AddArrayResources();
@@ -571,8 +614,9 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
 
     auto pPS = CreateShader(IsFormatted ? "ShaderResourceLayoutTest.FormattedBuffers - PS" : "ShaderResourceLayoutTest.StructuredBuffers - PS",
                             ShaderFileName, SrcLang == SHADER_SOURCE_LANGUAGE_HLSL ? "PSMain" : "main",
-                            SHADER_TYPE_PIXEL, SrcLang, PrepareMacros(1, SrcLang),
-                            Resources.data(), static_cast<Uint32>(Resources.size()));
+                            SHADER_TYPE_PIXEL, SrcLang, PrepareMacros(PSResArrId, SrcLang),
+                            Resources.data(), static_cast<Uint32>(Resources.size()),
+                            ModifyShaderCI);
     ASSERT_NE(pVS, nullptr);
     ASSERT_NE(pPS, nullptr);
 
@@ -602,7 +646,7 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
     ASSERT_NE(pSRB, nullptr);
 
     auto BindResources = [&](SHADER_TYPE ShaderType) {
-        const auto id = ShaderType == SHADER_TYPE_VERTEX ? 0 : 1;
+        const auto id = ShaderType == SHADER_TYPE_VERTEX ? VSResArrId : PSResArrId;
 
         SET_STATIC_VAR(pPSO, ShaderType, "g_Buff_Static", Set, RefBuffers.GetViewObjects(Buff_StaticIdx[id])[0]);
 
@@ -647,15 +691,15 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
     DrawAttribs DrawAttrs{6, DRAW_FLAG_VERIFY_ALL};
     pContext->Draw(DrawAttrs);
 
-    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Buff_Dyn", Set, RefBuffers.GetViewObjects(Buff_DynIdx[0])[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_Buff_Dyn", Set, RefBuffers.GetViewObjects(Buff_DynIdx[VSResArrId])[0]);
     if (!UseArraysInPSOnly)
     {
-        SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_BuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx[0] + 0), 0, 1);
-        SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_BuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx[0] + 1), 1, 1);
+        SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_BuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx[VSResArrId] + 0), 0, 1);
+        SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "g_BuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx[VSResArrId] + 1), 1, 1);
     }
 
-    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Buff_Dyn", Set, RefBuffers.GetViewObjects(Buff_DynIdx[1])[0]);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_BuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx[1]), 0, DynamicBuffArraySize);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_Buff_Dyn", Set, RefBuffers.GetViewObjects(Buff_DynIdx[PSResArrId])[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "g_BuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx[PSResArrId]), 0, DynamicBuffArraySize);
 
     pContext->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
@@ -697,18 +741,22 @@ void ShaderResourceLayoutTest::TestRWStructuredOrFormattedBuffer(bool IsFormatte
     const auto& deviceCaps = pDevice->GetDeviceCaps();
     auto        deviceType = deviceCaps.DevType;
 
+    constexpr Uint32 MaxStaticBuffArraySize  = 4;
+    constexpr Uint32 MaxMutableBuffArraySize = 3;
+    constexpr Uint32 MaxDynamicBuffArraySize = 2;
+
     // Prepare buffers with reference values
     ReferenceBuffers RefBuffers{
-        3 + 4 + 3 + 2,
+        3 + MaxStaticBuffArraySize + MaxMutableBuffArraySize + MaxDynamicBuffArraySize + 1, // Extra buffer for dynamic variables
         USAGE_DEFAULT,
         BIND_UNORDERED_ACCESS,
         BUFFER_VIEW_UNORDERED_ACCESS,
         IsFormatted ? BUFFER_MODE_FORMATTED : BUFFER_MODE_STRUCTURED //
     };
 
-    const Uint32 StaticBuffArraySize  = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 1 : 4;
-    const Uint32 MutableBuffArraySize = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 2 : 3;
-    const Uint32 DynamicBuffArraySize = 2;
+    const Uint32 StaticBuffArraySize  = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 1 : MaxStaticBuffArraySize;
+    const Uint32 MutableBuffArraySize = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 1 : MaxMutableBuffArraySize;
+    const Uint32 DynamicBuffArraySize = MaxDynamicBuffArraySize;
 
     static constexpr size_t Buff_StaticIdx = 0;
     static constexpr size_t Buff_MutIdx    = 1;
@@ -770,10 +818,19 @@ void ShaderResourceLayoutTest::TestRWStructuredOrFormattedBuffer(bool IsFormatte
     for (Uint32 i = 0; i < DynamicBuffArraySize; ++i)
         Macros.AddShaderMacro((std::string{"BuffArr_Dyn_Ref"} + std::to_string(i)).c_str(), RefBuffers.GetValue(BuffArr_DynIdx + i));
 
+    auto ModifyShaderCI = [](ShaderCreateInfo& ShaderCI) {
+        if (UseWARPResourceArrayIndexingBugWorkaround)
+        {
+            // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
+            ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
+            ShaderCI.HLSLVersion    = ShaderVersion{5, 0};
+        }
+    };
+
     auto pCS = CreateShader(IsFormatted ? "ShaderResourceLayoutTest.RWFormattedBuffers - CS" : "ShaderResourceLayoutTest.RWtructuredBuffers - CS",
                             ShaderFileName, "main",
                             SHADER_TYPE_COMPUTE, SrcLang, Macros,
-                            Resources, _countof(Resources));
+                            Resources, _countof(Resources), ModifyShaderCI);
     ASSERT_NE(pCS, nullptr);
 
     // clang-format off
@@ -808,9 +865,11 @@ void ShaderResourceLayoutTest::TestRWStructuredOrFormattedBuffer(bool IsFormatte
     SET_STATIC_VAR(pPSO, SHADER_TYPE_COMPUTE, "g_RWBuffArr_Static", SetArray, RefBuffers.GetViewObjects(BuffArr_StaticIdx), 0, StaticBuffArraySize);
 
     SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWBuff_Mut", Set, RefBuffers.GetViewObjects(Buff_MutIdx)[0]);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWBuff_Dyn", Set, RefBuffers.GetViewObjects(0)[0]);
     SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWBuffArr_Mut", SetArray, RefBuffers.GetViewObjects(BuffArr_MutIdx), 0, MutableBuffArraySize);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWBuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(0), 0, DynamicBuffArraySize);
+
+    // In Direct3D11 UAVs must not overlap!
+    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWBuff_Dyn", Set, RefBuffers.GetViewObjects(BuffArr_DynIdx)[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWBuffArr_Dyn", SetArray, RefBuffers.GetViewObjects(BuffArr_DynIdx + 1), 0, DynamicBuffArraySize);
 
     pSRB->InitializeStaticResources(pPSO);
 
@@ -855,12 +914,16 @@ TEST_F(ShaderResourceLayoutTest, RWTextures)
     const auto& deviceCaps = pDevice->GetDeviceCaps();
     auto        deviceType = deviceCaps.DevType;
 
-    const Uint32 StaticTexArraySize  = 2;
-    const Uint32 MutableTexArraySize = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 2 : 4;
-    const Uint32 DynamicTexArraySize = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 1 : 3;
+    constexpr Uint32 MaxStaticTexArraySize  = 2;
+    constexpr Uint32 MaxMutableTexArraySize = 4;
+    constexpr Uint32 MaxDynamicTexArraySize = 3;
+
+    const Uint32 StaticTexArraySize  = MaxStaticTexArraySize;
+    const Uint32 MutableTexArraySize = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 1 : MaxMutableTexArraySize;
+    const Uint32 DynamicTexArraySize = deviceType == RENDER_DEVICE_TYPE_D3D11 || deviceCaps.IsGLDevice() ? 1 : MaxDynamicTexArraySize;
 
     ReferenceTextures RefTextures{
-        3 + 2 + 4 + 3,
+        3 + MaxStaticTexArraySize + MaxMutableTexArraySize + MaxDynamicTexArraySize + 1, // Extra texture for dynamic variables
         128, 128,
         USAGE_DEFAULT,
         BIND_UNORDERED_ACCESS,
@@ -906,10 +969,19 @@ TEST_F(ShaderResourceLayoutTest, RWTextures)
         {"g_RWTex2DArr_Dyn",    SHADER_RESOURCE_TYPE_TEXTURE_UAV, DynamicTexArraySize}
     };
 
+    auto ModifyShaderCI = [](ShaderCreateInfo& ShaderCI) {
+        if (UseWARPResourceArrayIndexingBugWorkaround)
+        {
+            // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
+            ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
+            ShaderCI.HLSLVersion    = ShaderVersion{5, 0};
+        }
+    };
+
     auto pCS = CreateShader("ShaderResourceLayoutTest.RWTextures - CS",
                             "RWTextures.hlsl", "main",
                             SHADER_TYPE_COMPUTE, SHADER_SOURCE_LANGUAGE_HLSL, Macros,
-                            Resources, _countof(Resources));
+                            Resources, _countof(Resources), ModifyShaderCI);
     ASSERT_NE(pCS, nullptr);
 
     // clang-format off
@@ -944,9 +1016,11 @@ TEST_F(ShaderResourceLayoutTest, RWTextures)
     SET_STATIC_VAR(pPSO, SHADER_TYPE_COMPUTE, "g_RWTex2DArr_Static", SetArray, RefTextures.GetViewObjects(Tex2DArr_StaticIdx), 0, StaticTexArraySize);
 
     SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWTex2D_Mut", Set, RefTextures.GetViewObjects(Tex2D_MutIdx)[0]);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWTex2D_Dyn", Set, RefTextures.GetViewObjects(0)[0]);
     SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWTex2DArr_Mut", SetArray, RefTextures.GetViewObjects(Tex2DArr_MutIdx), 0, MutableTexArraySize);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWTex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(0), 0, DynamicTexArraySize);
+
+    // In Direct3D11 UAVs must not overlap!
+    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWTex2D_Dyn", Set, RefTextures.GetViewObjects(Tex2DArr_DynIdx)[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_COMPUTE, "g_RWTex2DArr_Dyn", SetArray, RefTextures.GetViewObjects(Tex2DArr_DynIdx + 1), 0, DynamicTexArraySize);
 
     pSRB->InitializeStaticResources(pPSO);
 
@@ -976,6 +1050,8 @@ TEST_F(ShaderResourceLayoutTest, ConstantBuffers)
     auto* pDevice    = pEnv->GetDevice();
     auto* pSwapChain = pEnv->GetSwapChain();
 
+    const auto& deviceCaps = pDevice->GetDeviceCaps();
+
     float ClearColor[] = {0.875, 0.75, 0.625, 0.125};
     RenderDrawCommandReference(pSwapChain, ClearColor);
 
@@ -995,8 +1071,9 @@ TEST_F(ShaderResourceLayoutTest, ConstantBuffers)
     static constexpr size_t BuffArr_MutIdx[]    = {3, 5};
     static constexpr size_t BuffArr_DynIdx[]    = {7, 2};
 
-
-    const auto& deviceCaps = pDevice->GetDeviceCaps();
+    const Uint32 VSResArrId = 0;
+    const Uint32 PSResArrId = deviceCaps.Features.SeparablePrograms ? 1 : 0;
+    VERIFY_EXPR(deviceCaps.IsGLDevice() || PSResArrId != VSResArrId);
 
     //  Vulkan allows 15 dynamic uniform buffer bindings among all stages
     const Uint32 StaticCBArraySize  = 2;
@@ -1054,15 +1131,18 @@ TEST_F(ShaderResourceLayoutTest, ConstantBuffers)
     }
     // clang-format on
 
+    // Even though shader array indexing is generally broken in D3D12 WARP,
+    // constant buffers seem to be working fine.
+
     auto pVS = CreateShader("ShaderResourceLayoutTest.ConstantBuffers - VS",
                             "ConstantBuffers.hlsl",
                             "VSMain",
-                            SHADER_TYPE_VERTEX, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(0),
+                            SHADER_TYPE_VERTEX, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(VSResArrId),
                             Resources.data(), static_cast<Uint32>(Resources.size()));
     auto pPS = CreateShader("ShaderResourceLayoutTest.ConstantBuffers - PS",
                             "ConstantBuffers.hlsl",
                             "PSMain",
-                            SHADER_TYPE_PIXEL, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(1),
+                            SHADER_TYPE_PIXEL, SHADER_SOURCE_LANGUAGE_HLSL, PrepareMacros(PSResArrId),
                             Resources.data(), static_cast<Uint32>(Resources.size()));
     ASSERT_NE(pVS, nullptr);
     ASSERT_NE(pPS, nullptr);
@@ -1095,7 +1175,7 @@ TEST_F(ShaderResourceLayoutTest, ConstantBuffers)
     ASSERT_NE(pSRB, nullptr);
 
     auto BindResources = [&](SHADER_TYPE ShaderType) {
-        const auto id = ShaderType == SHADER_TYPE_VERTEX ? 0 : 1;
+        const auto id = ShaderType == SHADER_TYPE_VERTEX ? VSResArrId : PSResArrId;
 
         SET_STATIC_VAR(pPSO, ShaderType, "UniformBuff_Stat", Set, RefBuffers.GetBuffObjects(Buff_StaticIdx[id])[0]);
 
@@ -1130,12 +1210,12 @@ TEST_F(ShaderResourceLayoutTest, ConstantBuffers)
     DrawAttribs DrawAttrs{6, DRAW_FLAG_VERIFY_ALL};
     pContext->Draw(DrawAttrs);
 
-    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "UniformBuff_Dyn", Set, RefBuffers.GetBuffObjects(Buff_DynIdx[0])[0]);
-    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "UniformBuff_Dyn", Set, RefBuffers.GetBuffObjects(Buff_DynIdx[1])[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "UniformBuff_Dyn", Set, RefBuffers.GetBuffObjects(Buff_DynIdx[VSResArrId])[0]);
+    SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "UniformBuff_Dyn", Set, RefBuffers.GetBuffObjects(Buff_DynIdx[PSResArrId])[0]);
     if (CBArraysSupported)
     {
-        SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "UniformBuffArr_Dyn", SetArray, RefBuffers.GetBuffObjects(BuffArr_DynIdx[0]), 0, DynamicCBArraySize);
-        SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "UniformBuffArr_Dyn", SetArray, RefBuffers.GetBuffObjects(BuffArr_DynIdx[1]), 0, DynamicCBArraySize);
+        SET_SRB_VAR(pSRB, SHADER_TYPE_VERTEX, "UniformBuffArr_Dyn", SetArray, RefBuffers.GetBuffObjects(BuffArr_DynIdx[VSResArrId]), 0, DynamicCBArraySize);
+        SET_SRB_VAR(pSRB, SHADER_TYPE_PIXEL, "UniformBuffArr_Dyn", SetArray, RefBuffers.GetBuffObjects(BuffArr_DynIdx[PSResArrId]), 0, DynamicCBArraySize);
     }
     pContext->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
