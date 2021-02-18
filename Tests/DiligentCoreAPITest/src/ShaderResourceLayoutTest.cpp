@@ -50,12 +50,6 @@ class ShaderResourceLayoutTest : public ::testing::Test
 protected:
     static void SetUpTestSuite()
     {
-        auto* const pEnv       = TestingEnvironment::GetInstance();
-        auto* const pDevice    = pEnv->GetDevice();
-        const auto& deviceCaps = pDevice->GetDeviceCaps();
-
-        UseWARPResourceArrayIndexingBugWorkaround =
-            deviceCaps.DevType == RENDER_DEVICE_TYPE_D3D12 && pEnv->GetAdapterType() == ADAPTER_TYPE_SOFTWARE;
     }
 
     static void TearDownTestSuite()
@@ -224,19 +218,7 @@ protected:
     void TestTexturesAndImtblSamplers(bool TestImtblSamplers);
     void TestStructuredOrFormattedBuffer(bool IsFormatted);
     void TestRWStructuredOrFormattedBuffer(bool IsFormatted);
-
-    // As of Windows version 2004 (build 19041), there is a bug in D3D12 WARP rasterizer:
-    // Shader resource array indexing always references array element 0 when shaders are compiled
-    // with shader model 5.1:
-    //      AllCorrect *= CheckValue(g_Tex2DArr_Static[0].SampleLevel(g_Sampler, UV.xy, 0.0), Tex2DArr_Static_Ref0); // OK
-    //      AllCorrect *= CheckValue(g_Tex2DArr_Static[1].SampleLevel(g_Sampler, UV.xy, 0.0), Tex2DArr_Static_Ref1); // FAIL - g_Tex2DArr_Static[0] is sampled
-    // The shaders work OK when using shader model 5.0 with old compiler.
-    // TODO: this should be fixed in the next Windows release - verify.
-    static bool UseWARPResourceArrayIndexingBugWorkaround;
 };
-
-bool ShaderResourceLayoutTest::UseWARPResourceArrayIndexingBugWorkaround = false;
-
 
 #define SET_STATIC_VAR(PSO, ShaderFlags, VarName, SetMethod, ...)                                \
     do                                                                                           \
@@ -262,10 +244,9 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
 {
     TestingEnvironment::ScopedReset EnvironmentAutoReset;
 
-    auto* pEnv       = TestingEnvironment::GetInstance();
-    auto* pDevice    = pEnv->GetDevice();
-    auto* pSwapChain = pEnv->GetSwapChain();
-
+    auto* const pEnv       = TestingEnvironment::GetInstance();
+    auto* const pDevice    = pEnv->GetDevice();
+    auto* const pSwapChain = pEnv->GetSwapChain();
     const auto& deviceCaps = pDevice->GetDeviceCaps();
 
     float ClearColor[] = {0.25, 0.5, 0.75, 0.125};
@@ -354,7 +335,7 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
         return static_cast<const ShaderMacro*>(Macros);
     };
 
-    auto ModifyShaderCI = [TestImtblSamplers](ShaderCreateInfo& ShaderCI) {
+    auto ModifyShaderCI = [TestImtblSamplers, pEnv](ShaderCreateInfo& ShaderCI) {
         if (TestImtblSamplers)
         {
             ShaderCI.UseCombinedTextureSamplers = true;
@@ -363,7 +344,7 @@ void ShaderResourceLayoutTest::TestTexturesAndImtblSamplers(bool TestImtblSample
             ShaderCI.HLSLVersion    = ShaderVersion{5, 0};
         }
 
-        if (UseWARPResourceArrayIndexingBugWorkaround)
+        if (pEnv->NeedWARPResourceArrayIndexingBugWorkaround())
         {
             // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
             ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
@@ -487,10 +468,9 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
 {
     TestingEnvironment::ScopedReset EnvironmentAutoReset;
 
-    auto* pEnv       = TestingEnvironment::GetInstance();
-    auto* pDevice    = pEnv->GetDevice();
-    auto* pSwapChain = pEnv->GetSwapChain();
-
+    auto* const pEnv       = TestingEnvironment::GetInstance();
+    auto* const pDevice    = pEnv->GetDevice();
+    auto* const pSwapChain = pEnv->GetSwapChain();
     const auto& deviceCaps = pDevice->GetDeviceCaps();
 
     float ClearColor[] = {0.625, 0.125, 0.25, 0.875};
@@ -594,8 +574,8 @@ void ShaderResourceLayoutTest::TestStructuredOrFormattedBuffer(bool IsFormatted)
         GTEST_FAIL() << "Unexpected device type";
     }
 
-    auto ModifyShaderCI = [](ShaderCreateInfo& ShaderCI) {
-        if (UseWARPResourceArrayIndexingBugWorkaround)
+    auto ModifyShaderCI = [pEnv](ShaderCreateInfo& ShaderCI) {
+        if (pEnv->NeedWARPResourceArrayIndexingBugWorkaround())
         {
             // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
             ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
@@ -732,9 +712,9 @@ void ShaderResourceLayoutTest::TestRWStructuredOrFormattedBuffer(bool IsFormatte
 {
     TestingEnvironment::ScopedReset EnvironmentAutoReset;
 
-    auto* pEnv       = TestingEnvironment::GetInstance();
-    auto* pDevice    = pEnv->GetDevice();
-    auto* pSwapChain = pEnv->GetSwapChain();
+    auto* const pEnv       = TestingEnvironment::GetInstance();
+    auto* const pDevice    = pEnv->GetDevice();
+    auto* const pSwapChain = pEnv->GetSwapChain();
 
     ComputeShaderReference(pSwapChain);
 
@@ -818,8 +798,8 @@ void ShaderResourceLayoutTest::TestRWStructuredOrFormattedBuffer(bool IsFormatte
     for (Uint32 i = 0; i < DynamicBuffArraySize; ++i)
         Macros.AddShaderMacro((std::string{"BuffArr_Dyn_Ref"} + std::to_string(i)).c_str(), RefBuffers.GetValue(BuffArr_DynIdx + i));
 
-    auto ModifyShaderCI = [](ShaderCreateInfo& ShaderCI) {
-        if (UseWARPResourceArrayIndexingBugWorkaround)
+    auto ModifyShaderCI = [pEnv](ShaderCreateInfo& ShaderCI) {
+        if (pEnv->NeedWARPResourceArrayIndexingBugWorkaround())
         {
             // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
             ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
@@ -969,8 +949,8 @@ TEST_F(ShaderResourceLayoutTest, RWTextures)
         {"g_RWTex2DArr_Dyn",    SHADER_RESOURCE_TYPE_TEXTURE_UAV, DynamicTexArraySize}
     };
 
-    auto ModifyShaderCI = [](ShaderCreateInfo& ShaderCI) {
-        if (UseWARPResourceArrayIndexingBugWorkaround)
+    auto ModifyShaderCI = [pEnv](ShaderCreateInfo& ShaderCI) {
+        if (pEnv->NeedWARPResourceArrayIndexingBugWorkaround())
         {
             // Due to bug in D3D12 WARP, we have to use SM5.0 with old compiler
             ShaderCI.ShaderCompiler = SHADER_COMPILER_DEFAULT;
