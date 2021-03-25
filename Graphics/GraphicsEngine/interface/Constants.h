@@ -47,9 +47,15 @@ DILIGENT_BEGIN_NAMESPACE(Diligent)
 /// The maximum number of resource signatures that one pipeline can use
 #define DILIGENT_MAX_RESOURCE_SIGNATURES 8
 
+/// AZ TODO: comment
+#define DILIGENT_MAX_ADAPTER_QUEUES 16
+
 static const Uint32 MAX_BUFFER_SLOTS        = DILIGENT_MAX_BUFFER_SLOTS;
 static const Uint32 MAX_RENDER_TARGETS      = DILIGENT_MAX_RENDER_TARGETS;
 static const Uint32 MAX_VIEWPORTS           = DILIGENT_MAX_VIEWPORTS;
 static const Uint32 MAX_RESOURCE_SIGNATURES = DILIGENT_MAX_RESOURCE_SIGNATURES;
+static const Uint32 MAX_ADAPTER_QUEUES      = DILIGENT_MAX_ADAPTER_QUEUES;
+static const Uint32 DEFAULT_ADAPTER_ID      = 0xFFFFFFFFU;
+static const Uint32 DEFAULT_QUEUE_ID        = 0xFFFFFFFFU;
 
 DILIGENT_END_NAMESPACE // namespace Diligent

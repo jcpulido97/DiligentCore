@@ -92,6 +92,9 @@ struct TextureDesc DILIGENT_DERIVE(DeviceObjectAttribs)
     /// Miscellaneous flags, see Diligent::MISC_TEXTURE_FLAGS for details.
     MISC_TEXTURE_FLAGS MiscFlags        DEFAULT_INITIALIZER(MISC_TEXTURE_FLAG_NONE);
     
+    /// Allows a resource to be simultaneously read from multiple contexts.
+    Bool        AllowSimultaneousAccess DEFAULT_INITIALIZER(False);
+
     /// Optimized clear value
     OptimizedClearValue ClearValue;
 

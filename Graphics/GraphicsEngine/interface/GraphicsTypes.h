@@ -1220,8 +1220,11 @@ DILIGENT_TYPED_ENUM(ADAPTER_TYPE, Uint8)
     /// Software adapter
     ADAPTER_TYPE_SOFTWARE,
 
-    /// Hardware adapter
-    ADAPTER_TYPE_HARDWARE
+    /// Integrated hardware adapter
+    ADAPTER_TYPE_INTEGRATED,
+        
+    /// Discrete hardware adapter
+    ADAPTER_TYPE_DISCRETE,
 };
 
 
@@ -1387,6 +1390,8 @@ struct SwapChainDesc
     /// Indicates if this is a primary swap chain. When Present() is called
     /// for the primary swap chain, the engine releases stale resources.
     bool  IsPrimary                     DEFAULT_INITIALIZER(true);
+
+    // AZ TODO: add pointer to a graphics queue
 
 #if DILIGENT_CPP_INTERFACE
     SwapChainDesc() noexcept
@@ -1778,56 +1783,6 @@ DILIGENT_TYPED_ENUM(ADAPTER_VENDOR, Uint8)
     ADAPTER_VENDOR_MSFT
 };
 
-/// Graphics adapter properties
-struct GraphicsAdapterInfo
-{
-    /// A string that contains the adapter description.
-    char Description[128]   DEFAULT_INITIALIZER({});
-
-    /// Adapter type, see Diligent::ADAPTER_TYPE.
-    ADAPTER_TYPE   Type     DEFAULT_INITIALIZER(ADAPTER_TYPE_UNKNOWN);
-
-    /// Adapter vendor, see Diligent::ADAPTER_VENDOR.
-    ADAPTER_VENDOR Vendor   DEFAULT_INITIALIZER(ADAPTER_VENDOR_UNKNOWN);
-
-    /// The PCI ID of the hardware vendor (if available).
-    Uint32 VendorId         DEFAULT_INITIALIZER(0);
-
-    /// The PCI ID of the hardware device (if available).
-    Uint32 DeviceId         DEFAULT_INITIALIZER(0);
-
-    /// Number of video outputs this adapter has (if available).
-    Uint32 NumOutputs       DEFAULT_INITIALIZER(0);
-
-    /// The amount of local video memory that is inaccessible by CPU, in bytes.
-
-    /// \note Device-local memory is where USAGE_DEFAULT and USAGE_IMMUTABLE resources
-    ///       are typically allocated.
-    ///
-    ///       On some devices it may not be possible to query the memory size,
-    ///       in which case all memory sizes will be zero.
-    Uint64  DeviceLocalMemory   DEFAULT_INITIALIZER(0);
-
-
-    /// The amount of host-visible memory that can be accessed by CPU and is visible by GPU, in bytes.
-
-    /// \note Host-visible memory is where USAGE_DYNAMIC and USAGE_STAGING resources
-    ///       are typically allocated.
-    Uint64  HostVisibileMemory  DEFAULT_INITIALIZER(0);
-
-
-    /// The amount of unified memory that can be directly accessed by both CPU and GPU, in bytes.
-
-    /// \note Unified memory is where USAGE_UNIFIED resources are typically allocated, but
-    ///       resourecs with other usages may be allocated as well if there is no corresponding
-    ///       memory type.
-    Uint64  UnifiedMemory       DEFAULT_INITIALIZER(0);
-
-    /// Supported access types for the unified memory.
-    CPU_ACCESS_FLAGS UnifiedMemoryCPUAccess DEFAULT_INITIALIZER(CPU_ACCESS_NONE);
-};
-typedef struct GraphicsAdapterInfo GraphicsAdapterInfo;
-
 
 /// Device capabilities
 struct DeviceCaps
@@ -1978,17 +1933,172 @@ struct DeviceProperties
 typedef struct DeviceProperties DeviceProperties;
 
 
+/// Device context type
+DILIGENT_TYPED_ENUM(CONTEXT_TYPE, Uint8)
+{
+    CONTEXT_TYPE_UNKNOWN  = 0,
+
+    /// Context that supports only memory transfer commands.
+    CONTEXT_TYPE_TRANSFER = 1,
+
+    /// Context that supports compute, ray tracing and transfer commands.
+    CONTEXT_TYPE_COMPUTE  = 2,
+
+    /// Context that supports graphics, compute, ray tracing and transfer commands.
+    CONTEXT_TYPE_GRAPHICS = 3,
+
+    CONTEXT_TYPE_LAST     = CONTEXT_TYPE_GRAPHICS
+};
+
+
+/// Device queue info.
+struct QueueInfo
+{
+    /// AZ TODO: comment
+    CONTEXT_TYPE QueueType       DEFAULT_INITIALIZER(CONTEXT_TYPE_UNKNOWN);
+    
+    /// Depends on implementation different queues may allow to use same command lists and
+    /// resources without sharind options. To 
+    Uint32       HardwareQueueID DEFAULT_INITIALIZER(0);
+
+    /// Number of queues which may be created with combination of QueueType and HardwareQueueID.
+    Uint32       NumQueues       DEFAULT_INITIALIZER(0);
+
+    // AZ TODO: comment
+    Uint32       TextureCopyGranularity[3] DEFAULT_INITIALIZER({});
+};
+typedef struct QueueInfo QueueInfo;
+
+
+// AZ TODO: comment
+DILIGENT_TYPED_ENUM(GRAPHICS_API, Uint32)
+{
+    GRAPHICS_API_UNKNOWN,
+
+    GRAPHICS_API_DIRECT3D_FL_10_0,
+    GRAPHICS_API_DIRECT3D_FL_10_1,
+    GRAPHICS_API_DIRECT3D_FL_11_0,
+    GRAPHICS_API_DIRECT3D_FL_11_1,
+    GRAPHICS_API_DIRECT3D_FL_12_0,
+    GRAPHICS_API_DIRECT3D_FL_12_1,
+    GRAPHICS_API_DIRECT3D_FL_12_2,
+
+    GRAPHICS_API_OPENGL_4_3,
+    GRAPHICS_API_OPENGL_4_4,
+    GRAPHICS_API_OPENGL_4_5,
+    GRAPHICS_API_OPENGL_4_6,
+
+    GRAPHICS_API_OPENGLES_3_0,
+    GRAPHICS_API_OPENGLES_3_1,
+    GRAPHICS_API_OPENGLES_3_2,
+
+    GRAPHICS_API_VULKAN_1_0,
+    GRAPHICS_API_VULKAN_1_1,
+    GRAPHICS_API_VULKAN_1_2,
+
+    GRAPHICS_API_MAX_VERSION,
+};
+
+
+/// Graphics adapter properties
+struct GraphicsAdapterInfo
+{
+    /// A string that contains the adapter description.
+    char Description[128]   DEFAULT_INITIALIZER({});
+
+    /// Adapter type, see Diligent::ADAPTER_TYPE.
+    ADAPTER_TYPE   Type     DEFAULT_INITIALIZER(ADAPTER_TYPE_UNKNOWN);
+    
+    // AZ TODO: comment
+    // or ShaderVersion ???
+    GRAPHICS_API   APIVersion  DEFAULT_INITIALIZER(GRAPHICS_API_UNKNOWN);
+
+    /// Adapter vendor, see Diligent::ADAPTER_VENDOR.
+    ADAPTER_VENDOR Vendor   DEFAULT_INITIALIZER(ADAPTER_VENDOR_UNKNOWN);
+
+    /// The PCI ID of the hardware vendor (if available).
+    Uint32 VendorId         DEFAULT_INITIALIZER(0);
+
+    /// The PCI ID of the hardware device (if available).
+    Uint32 DeviceId         DEFAULT_INITIALIZER(0);
+
+    /// Number of video outputs this adapter has (if available).
+    Uint32 NumOutputs       DEFAULT_INITIALIZER(0);
+
+    /// The amount of local video memory that is inaccessible by CPU, in bytes.
+
+    /// \note Device-local memory is where USAGE_DEFAULT and USAGE_IMMUTABLE resources
+    ///       are typically allocated.
+    ///
+    ///       On some devices it may not be possible to query the memory size,
+    ///       in which case all memory sizes will be zero.
+    Uint64  DeviceLocalMemory   DEFAULT_INITIALIZER(0);
+
+
+    /// The amount of host-visible memory that can be accessed by CPU and is visible by GPU, in bytes.
+
+    /// \note Host-visible memory is where USAGE_DYNAMIC and USAGE_STAGING resources
+    ///       are typically allocated.
+    Uint64  HostVisibileMemory  DEFAULT_INITIALIZER(0);
+
+
+    /// The amount of unified memory that can be directly accessed by both CPU and GPU, in bytes.
+
+    /// \note Unified memory is where USAGE_UNIFIED resources are typically allocated, but
+    ///       resourecs with other usages may be allocated as well if there is no corresponding
+    ///       memory type.
+    Uint64  UnifiedMemory       DEFAULT_INITIALIZER(0);
+
+    /// Supported access types for the unified memory.
+    CPU_ACCESS_FLAGS UnifiedMemoryCPUAccess DEFAULT_INITIALIZER(CPU_ACCESS_NONE);
+
+    /// Hardware features and properties.
+    DeviceCaps       Capabilities;
+    DeviceProperties Properties;
+    
+    /// Queue types which are supported by this device.
+    QueueInfo  Queues[MAX_ADAPTER_QUEUES]  DEFAULT_INITIALIZER();
+};
+typedef struct GraphicsAdapterInfo GraphicsAdapterInfo;
+
+
+/// Device context create info
+struct ContextCreateInfo
+{
+    /// AZ TODO: comment
+    const char*  Name       DEFAULT_INITIALIZER(nullptr);
+    
+    /// AZ TODO: comment
+    CONTEXT_TYPE ContextType  DEFAULT_INITIALIZER(CONTEXT_TYPE_UNKNOWN);
+
+    /// Queue index in GraphicsAdapterInfo::Queues.
+    Uint32       QueueID      DEFAULT_INITIALIZER(DEFAULT_QUEUE_ID);
+
+    /// AZ TODO: comment
+    float        Priority   DEFAULT_INITIALIZER(0.0f);
+};
+typedef struct ContextCreateInfo ContextCreateInfo;
+
+
 /// Engine creation attibutes
 struct EngineCreateInfo
 {
     /// API version number.
     Int32                    APIVersion             DEFAULT_INITIALIZER(DILIGENT_API_VERSION);
 
+    /// Device contexts.
+    /// If not specified then a single graphics context will be created.
+    /// The recomended configuration:
+    ///   Modern discrete GPU:      1 graphics, 1 compute, 1 transfer contexts.
+    ///   Integrated or mobile GPU: 1..2 graphics contexts.
+    const ContextCreateInfo* pContextInfo           DEFAULT_INITIALIZER(nullptr);
+    Uint32                   NumContexts            DEFAULT_INITIALIZER(0);
+
     /// Number of deferred contexts to create when initializing the engine. If non-zero number 
     /// is given, pointers to the contexts are written to ppContexts array by the engine factory 
     /// functions (IEngineFactoryD3D11::CreateDeviceAndContextsD3D11,
     /// IEngineFactoryD3D12::CreateDeviceAndContextsD3D12, and IEngineFactoryVk::CreateDeviceAndContextsVk)
-    /// starting at position 1.
+    /// starting at position max(1, NumContexts).
     Uint32                   NumDeferredContexts    DEFAULT_INITIALIZER(0);
 
     /// Requested device features.
@@ -2008,6 +2118,13 @@ struct EngineCreateInfo
 
     /// Pointer to the user-specified debug message callback function
     DebugMessageCallbackType DebugMessageCallback   DEFAULT_INITIALIZER(nullptr);
+    
+    /// Id of the hardware adapter the engine should be initialized on.
+    /// Call IEngineFactory::EnumerateAdapters() to get all available adapters.
+    Uint32      AdapterId          DEFAULT_INITIALIZER(DEFAULT_ADAPTER_ID);
+
+    /// Minimum required graphics API version (feature level for Direct3D).
+    GRAPHICS_API MinimumGraphicsAPIVersion DEFAULT_INITIALIZER(GRAPHICS_API_MAX_VERSION);
 };
 typedef struct EngineCreateInfo EngineCreateInfo;
 
@@ -2054,38 +2171,8 @@ DILIGENT_TYPED_ENUM(D3D11_DEBUG_FLAGS, Uint32)
 };
 DEFINE_FLAG_ENUM_OPERATORS(D3D11_DEBUG_FLAGS)
 
-/// Direct3D11/12 feature level
-DILIGENT_TYPED_ENUM(DIRECT3D_FEATURE_LEVEL, Uint8)
-{
-    /// Feature level 10.0
-    DIRECT3D_FEATURE_LEVEL_10_0,
-
-    /// Feature level 10.1
-    DIRECT3D_FEATURE_LEVEL_10_1,
-
-    /// Feature level 11.0
-    DIRECT3D_FEATURE_LEVEL_11_0,
-
-    /// Feature level 11.1
-    DIRECT3D_FEATURE_LEVEL_11_1,
-
-    /// Feature level 12.0
-    DIRECT3D_FEATURE_LEVEL_12_0,
-
-    /// Feature level 12.1
-    DIRECT3D_FEATURE_LEVEL_12_1
-};
-
-static const Uint32 DEFAULT_ADAPTER_ID = 0xFFFFFFFFU;
-
 /// Attributes specific to D3D11 engine
 struct EngineD3D11CreateInfo DILIGENT_DERIVE(EngineCreateInfo)
-           
-    /// Id of the hardware adapter the engine should be initialized on.
-    Uint32                 AdapterId           DEFAULT_INITIALIZER(DEFAULT_ADAPTER_ID);
-
-    /// Minimum required Direct3D feature level.
-    DIRECT3D_FEATURE_LEVEL MinimumFeatureLevel DEFAULT_INITIALIZER(DIRECT3D_FEATURE_LEVEL_11_0);
 
     /// Debug flags. See Diligent::D3D11_DEBUG_FLAGS for a list of allowed values.
     ///
@@ -2100,12 +2187,6 @@ struct EngineD3D12CreateInfo DILIGENT_DERIVE(EngineCreateInfo)
 
     /// Name of the D3D12 DLL to load. Ignored on UWP.
     const char* D3D12DllName       DEFAULT_INITIALIZER("d3d12.dll");
-
-    /// Id of the hardware adapter the engine should be initialized on.
-    Uint32      AdapterId          DEFAULT_INITIALIZER(DEFAULT_ADAPTER_ID);
-
-    /// Minimum required Direct3D feature level.
-    DIRECT3D_FEATURE_LEVEL MinimumFeatureLevel DEFAULT_INITIALIZER(DIRECT3D_FEATURE_LEVEL_11_0);
 
     /// Enable Direct3D12 debug layer.
     bool EnableDebugLayer           DEFAULT_INITIALIZER(false);
@@ -2280,9 +2361,6 @@ typedef struct VulkanDescriptorPoolSize VulkanDescriptorPoolSize;
 
 /// Attributes specific to Vulkan engine
 struct EngineVkCreateInfo DILIGENT_DERIVE(EngineCreateInfo)
-    
-    /// Id of the hardware adapter the engine should be initialized on.
-    Uint32             AdapterId                DEFAULT_INITIALIZER(DEFAULT_ADAPTER_ID);
 
     /// Enable Vulkan validation layers.
     bool               EnableValidation         DEFAULT_INITIALIZER(false);

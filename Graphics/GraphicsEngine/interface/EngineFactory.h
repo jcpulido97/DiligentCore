@@ -70,6 +70,10 @@ DILIGENT_BEGIN_INTERFACE(IEngineFactory, IObject)
                         const Char*                              SearchDirectories,
                         struct IShaderSourceInputStreamFactory** ppShaderSourceFactory) CONST PURE;
 
+    /// AZ TODO: comment
+    VIRTUAL void METHOD(EnumerateAdapters)(Uint32 REF           NumAdapters,
+                                           GraphicsAdapterInfo* Adapters) CONST PURE;
+
 #if PLATFORM_ANDROID
     /// On Android platform, it is necessary to initialize the file system before
     /// CreateDefaultShaderSourceStreamFactory() method can be called.

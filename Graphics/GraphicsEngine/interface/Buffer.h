@@ -94,6 +94,9 @@ struct BufferDesc DILIGENT_DERIVE(DeviceObjectAttribs)
     /// Buffer mode, see Diligent::BUFFER_MODE
     BUFFER_MODE Mode                DEFAULT_INITIALIZER(BUFFER_MODE_UNDEFINED);
 
+    /// Allows a resource to be simultaneously read from multiple contexts.
+    Bool        AllowSimultaneousAccess DEFAULT_INITIALIZER(False);
+
     /// Buffer element stride, in bytes.
 
     /// For a structured buffer (BufferDesc::Mode equals Diligent::BUFFER_MODE_STRUCTURED) this member 
