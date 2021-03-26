@@ -126,14 +126,12 @@ ShaderVkImpl::ShaderVkImpl(IReferenceCounters*     pRefCounters,
 
                     GLSLangUtils::SpirvVersion spvVersion = GLSLangUtils::SpirvVersion::Vk100;
                     const auto&                ExtFeats   = GetDevice()->GetLogicalDevice().GetEnabledExtFeatures();
-                    const auto                 VkVersion  = GetDevice()->GetVulkanInstance()->GetVkVersion();
+                    const auto                 VkVersion  = GetDevice()->GetVkVersion();
 
-                    switch (VkVersion)
-                    {
-                        case VK_API_VERSION_1_0: break;
-                        case VK_API_VERSION_1_1: spvVersion = ExtFeats.Spirv14 ? GLSLangUtils::SpirvVersion::Vk110_Spirv14 : GLSLangUtils::SpirvVersion::Vk110; break;
-                        case VK_API_VERSION_1_2: spvVersion = GLSLangUtils::SpirvVersion::Vk120; break;
-                    }
+                    if (VkVersion >= VK_API_VERSION_1_1)
+                        spvVersion = ExtFeats.Spirv14 ? GLSLangUtils::SpirvVersion::Vk110_Spirv14 : GLSLangUtils::SpirvVersion::Vk110;
+                    if (VkVersion >= VK_API_VERSION_1_2)
+                        spvVersion = GLSLangUtils::SpirvVersion::Vk120;
 
                     m_SPIRV = GLSLangUtils::GLSLtoSPIRV(m_Desc.ShaderType, ShaderSource,
                                                         static_cast<int>(SourceLength), Macros,

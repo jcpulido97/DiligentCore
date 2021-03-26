@@ -256,7 +256,7 @@ void EngineFactoryVkImpl::CreateDeviceAndContextsVk(const EngineVkCreateInfo& _E
 
         const VulkanUtilities::VulkanPhysicalDevice::ExtensionFeatures& DeviceExtFeatures = PhysicalDevice->GetExtFeatures();
         VulkanUtilities::VulkanPhysicalDevice::ExtensionFeatures        EnabledExtFeats   = {};
-        const auto                                                      VkVersion         = Instance->GetVkVersion();
+        const auto                                                      VkVersion         = std::min(Instance->GetVkInstanceVersion(), PhysicalDevice->GetProperties().apiVersion);
 
 #define ENABLE_FEATURE(IsFeatureSupported, Feature, FeatureName)                         \
     do                                                                                   \
