@@ -1,27 +1,8 @@
-# Diligent Core [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=An%20easy-to-use%20cross-platform%20graphics%20library%20that%20takes%20full%20advantage%20of%20%23Direct3D12%20and%20%23VulkanAPI&url=https://github.com/DiligentGraphics/DiligentEngine) <img src="media/diligentgraphics-logo.png" height=64 align="right" valign="middle">
+# Diligent Engine
 
-This module implements [Diligent Engine](https://github.com/DiligentGraphics/DiligentEngine)'s core functionality: Direct3D11, Direct3D12,
-OpenGL, OpenGLES, and Vulkan rendering backends as well as basic platform-specific utilities. It is self-contained and can be built by its own.
-The module's cmake script defines a number of variables that are required to generate build files for other modules,
-so it must always be handled first.
-
-| Platform             | Build Status  |
-| ---------------------| ------------- |
-|<img src="media/windows-logo.png" width=24 valign="middle"> Win32               | [![Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentCore?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentcore) |
-|<img src="media/uwindows-logo.png" width=24 valign="middle"> Universal Windows  | [![Build Status](https://ci.appveyor.com/api/projects/status/github/DiligentGraphics/DiligentCore?svg=true)](https://ci.appveyor.com/project/DiligentGraphics/diligentcore) |
-|<img src="media/linux-logo.png" width=24 valign="middle"> Linux                 | [![Build Status](https://travis-ci.org/DiligentGraphics/DiligentCore.svg?branch=master)](https://travis-ci.org/DiligentGraphics/DiligentCore)      |
-|<img src="media/macos-logo.png" width=24 valign="middle"> MacOS                 | [![Build Status](https://travis-ci.org/DiligentGraphics/DiligentCore.svg?branch=master)](https://travis-ci.org/DiligentGraphics/DiligentCore)      |
-|<img src="media/apple-logo.png" width=24 valign="middle"> iOS                   | [![Build Status](https://travis-ci.org/DiligentGraphics/DiligentCore.svg?branch=master)](https://travis-ci.org/DiligentGraphics/DiligentCore)      |
-
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](License.txt)
-[![Chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/diligent-engine)
-[![Chat on Discord](https://img.shields.io/discord/730091778081947680?logo=discord)](https://discord.gg/t7HGBK7)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/bb1c00eacb1740d68339d3a45f4c5756)](https://www.codacy.com/manual/DiligentGraphics/DiligentCore?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=DiligentGraphics/DiligentCore&amp;utm_campaign=Badge_Grade)
-[![Lines of Code](https://tokei.rs/b1/github.com/DiligentGraphics/DiligentCore)](https://github.com/DiligentGraphics/DiligentCore)
-
+This module implements [Diligent Engine](https://github.com/DiligentGraphics/DiligentEngine)'s core functionality: Direct3D11, Direct3D12, OpenGL, OpenGLES, and Vulkan rendering backends as well as basic platform-specific utilities. It is self-contained and can be built by its own. The module's cmake script defines a number of variables that are required to generate build files for other modules, so it must always be handled first.
 
 # Table of Contents
-
 - [Clonning the Repository](#clonning)
 - [API Basics](#api_basics)
   - [Initializing the Engine](#initialization)
@@ -46,8 +27,8 @@ so it must always be handled first.
 - [Release History](#release_history)
 
 
-<a name="clonning"></a>
-# Clonning the Repository
+
+# Cloning the Repository
 
 To get the repository and all submodules, use the following command:
 
@@ -59,15 +40,14 @@ To build the module, see
 [build instructions](https://github.com/DiligentGraphics/DiligentEngine/blob/master/README.md#build-and-run-instructions) 
 in the master repository.
 
-<a name="api_basics"></a>
+
+
 # API Basics
 
-<a name="initialization"></a>
 ## Initializing the Engine
 
 Before you can use any functionality provided by the engine, you need to create a render device, an immediate context and a swap chain.
 
-<a name="initialization_win32"></a>
 ### Win32
 On Win32 platform, you can create OpenGL, Direct3D11, Direct3D12 or Vulkan device as shown below:
 
@@ -157,7 +137,6 @@ dynamic library and imports the functions required to initialize the engine. You
 #include "EngineFactoryD3D12.h"
 #include "EngineFactoryOpenGL.h"
 #include "EngineFactoryVk.h"
-
 ```
 
 You also need to add the following directories to the include search paths:
@@ -179,11 +158,8 @@ can be used for multi-threaded command recording. Deferred contexts can only be 
 engine. The function populates an array of pointers to the contexts, where the immediate context goes at position 0,
 followed by all deferred contexts.
 
-For more details, take a look at 
-[Tutorial00_HelloWin32.cpp](https://github.com/DiligentGraphics/DiligentSamples/blob/master/Tutorials/Tutorial00_HelloWin32/src/Tutorial00_HelloWin32.cpp) 
-file.
+For more details, take a look at [Tutorial00_HelloWin32.cpp](https://github.com/DiligentGraphics/DiligentSamples/blob/master/Tutorials/Tutorial00_HelloWin32/src/Tutorial00_HelloWin32.cpp) file.
 
-<a name="initialization_uwp"></a>
 ### Universal Windows Platform
 
 On Universal Windows Platform, you can create Direct3D11 or Direct3D12 device. Only static linking is
@@ -676,27 +652,27 @@ objects. Refer to the following pages for more information:
 
  The repository contains the following projects:
 
- | Project                                                          | Description       |
- |------------------------------------------------------------------|-------------------|
- | [Primitives](https://github.com/DiligentGraphics/DiligentCore/tree/master/Primitives)                                        | Definitions of basic types (Int32, Int16, Uint32, etc.) and interfaces (IObject, IReferenceCounters, etc.) |
- | [Common](https://github.com/DiligentGraphics/DiligentCore/tree/master/Common)                                                | Common functionality such as file wrapper, logging, debug utilities, etc. |
- | [Graphics/GraphicsAccessories](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsAccessories)    | Basic graphics accessories used by all implementations  |
- | [Graphics/GraphicsEngine](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngine)              | Platform-independent base functionality |
- | [Graphics/GraphicsEngineD3DBase](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineD3DBase)| Base functionality for D3D11/D3D12 implementations |
- | [Graphics/GraphicsEngineD3D11](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineD3D11)     | Implementation of Direct3D11 rendering backend |
- | [Graphics/GraphicsEngineD3D12](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineD3D12)     | Implementation of Direct3D12 rendering backend |
- | [Graphics/GraphicsEngineOpenGL](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineOpenGL)   | Implementation of OpenGL/GLES rendering backend |
- | [Graphics/GraphicsEngineVulkan](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineVulkan)   | Implementation of Vulkan rendering backend |
- | [Graphics/GraphicsEngineMetal](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineMetal)     | Implementation of Metal rendering backend |
- | [Graphics/GraphicsTools](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsTools)                 | Graphics utilities build on top of core interfaces (definitions of commonly used states, texture uploaders, etc.) |
- | [Graphics/HLSL2GLSLConverterLib](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/HLSL2GLSLConverterLib) | HLSL to GLSL source code converter library |
- | [Platforms/Basic](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Basic)      | Interface for platform-specific routines and implementation of some common functionality |
- | [Platforms/Android](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Android)  | Implementation of platform-specific routines on Android |
- | [Platforms/Apple](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Apple)      | Implementation of platform-specific routines on Apple platforms (MacOS, iOS)|
- | [Platforms/UWP](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/UWP)          | Implementation of platform-specific routines on Universal Windows platform |
- | [Platforms/Win32](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Win32)      | Implementation of platform-specific routines on Win32 platform |
- | [Platforms/Linux](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Linux)      | Implementation of platform-specific routines on Linux platform |
- | External | Third-party libraries and modules |
+| Project                                                          | Description       |
+|------------------------------------------------------------------|-------------------|
+| [Primitives](https://github.com/DiligentGraphics/DiligentCore/tree/master/Primitives)                                        | Definitions of basic types (Int32, Int16, Uint32, etc.) and interfaces (IObject, IReferenceCounters, etc.) |
+| [Common](https://github.com/DiligentGraphics/DiligentCore/tree/master/Common)                                                | Common functionality such as file wrapper, logging, debug utilities, etc. |
+| [Graphics/GraphicsAccessories](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsAccessories)    | Basic graphics accessories used by all implementations  |
+| [Graphics/GraphicsEngine](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngine)              | Platform-independent base functionality |
+| [Graphics/GraphicsEngineD3DBase](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineD3DBase)| Base functionality for D3D11/D3D12 implementations |
+| [Graphics/GraphicsEngineD3D11](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineD3D11)     | Implementation of Direct3D11 rendering backend |
+| [Graphics/GraphicsEngineD3D12](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineD3D12)     | Implementation of Direct3D12 rendering backend |
+| [Graphics/GraphicsEngineOpenGL](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineOpenGL)   | Implementation of OpenGL/GLES rendering backend |
+| [Graphics/GraphicsEngineVulkan](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineVulkan)   | Implementation of Vulkan rendering backend |
+| [Graphics/GraphicsEngineMetal](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsEngineMetal)     | Implementation of Metal rendering backend |
+| [Graphics/GraphicsTools](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/GraphicsTools)                 | Graphics utilities build on top of core interfaces (definitions of commonly used states, texture uploaders, etc.) |
+| [Graphics/HLSL2GLSLConverterLib](https://github.com/DiligentGraphics/DiligentCore/tree/master/Graphics/HLSL2GLSLConverterLib) | HLSL to GLSL source code converter library |
+| [Platforms/Basic](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Basic)      | Interface for platform-specific routines and implementation of some common functionality |
+| [Platforms/Android](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Android)  | Implementation of platform-specific routines on Android |
+| [Platforms/Apple](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Apple)      | Implementation of platform-specific routines on Apple platforms (MacOS, iOS)|
+| [Platforms/UWP](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/UWP)          | Implementation of platform-specific routines on Universal Windows platform |
+| [Platforms/Win32](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Win32)      | Implementation of platform-specific routines on Win32 platform |
+| [Platforms/Linux](https://github.com/DiligentGraphics/DiligentCore/tree/master/Platforms/Linux)      | Implementation of platform-specific routines on Linux platform |
+| External | Third-party libraries and modules |
 
 # License
 
@@ -739,8 +715,6 @@ on how to set up clang-format and automatic code formatting.
 
 [API Basics](http://diligentgraphics.com/diligent-engine/api-basics/)
 
-[API Reference][https://jcpulido97.github.io/DiligentEngineDoc/html/index.html]
-
 <a name="release_history"></a>
 # Release History
 
@@ -749,9 +723,3 @@ See [Release History](ReleaseHistory.md)
 -------------------
 
 [diligentgraphics.com](http://diligentgraphics.com)
-
-[![Diligent Engine on Twitter](https://github.com/DiligentGraphics/DiligentCore/blob/master/media/twitter.png)](https://twitter.com/diligentengine)
-[![Diligent Engine on Facebook](https://github.com/DiligentGraphics/DiligentCore/blob/master/media/facebook.png)](https://www.facebook.com/DiligentGraphics/)
-
-
-[1]: https://cdn.rawgit.com/DiligentGraphics/DiligentCore/4949ec8a/doc/html/index.html
